@@ -1,9 +1,10 @@
-# Load required libraries
+# === Load required libraries ===
 library(readr)
 library(VIM)
 library(randomForest)
 library(caret)
 library(pROC)
+library(performanceEstimation)  # For SMOTE
 
 # === Load data ===
 train <- read.csv("data/assign3_train.csv")
@@ -72,23 +73,25 @@ train_index <- createDataPartition(train_clean$y, p = 0.8, list = FALSE)
 train_set <- train_clean[train_index, ]
 test_set <- train_clean[-train_index, ]
 
+# === Apply SMOTE to training set ===
+train_set_smote <- smote(y ~ ., data = train_set, perc.over = 20)
+train_set_smote$y <- factor(train_set_smote$y, levels = c("No", "Yes"))
+
 # === Model training with cross-validation ===
 set.seed(123)
 train_control <- trainControl(method = "cv",
-                              number = 5,
+                              number = 3,
                               summaryFunction = twoClassSummary,
-                              classProbs = TRUE,
-                              sampling = "down")  
-
+                              classProbs = TRUE)  # no sampling arg here
 
 # Tune mtry
-tune_grid <- expand.grid(mtry = c(5, 7, 9))
+tune_grid <- expand.grid(mtry = c(5, 7))
 
-cv_model <- train(y ~ ., data = train_set, method = "rf",
+cv_model <- train(y ~ ., data = train_set_smote, method = "rf",
                   trControl = train_control,
                   metric = "ROC",
                   tuneGrid = tune_grid,
-                  ntree = 100)
+                  ntree = 50)
 
 print(cv_model)
 
@@ -115,7 +118,6 @@ final_predictions <- predict(cv_model, test_final)
 final_predictions_numeric <- as.numeric(final_predictions) - 1  # Yes -> 1, No -> 0
 predictions_df <- data.frame(y = final_predictions_numeric)
 head(predictions_df)
-
 
 # === Export predictions ===
 # write.csv(predictions_df, "2834723.csv", row.names = FALSE)  # Replace with your candidate number!
